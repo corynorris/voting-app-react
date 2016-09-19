@@ -4,5 +4,5 @@ The following app demonstrates a `NodeJS` server that uses `Socket IO` to demons
 
 ## Contents
 
-`voting-client` - This is the client code containing the `React` code.  
-`voting-server` - This is the server that runs the vote, and calculates the results of the vote as well as the next available choices.  
+`voting-client/` - This is the client code containing the `React` code.  
+`voting-server/` - This is the server that runs the vote, and calculates the results of the vote as well as the next available choices.  
