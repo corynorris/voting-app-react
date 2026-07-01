@@ -1,27 +1,30 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { AppState } from "./types";
+import type { TournamentState } from "./types";
 
-const initialState: AppState = {};
+const initialState: TournamentState | null = null;
 
 const votingSlice = createSlice({
   name: "voting",
-  initialState,
+  initialState: initialState as TournamentState | null,
   reducers: {
-    // Server sends full state snapshot
-    SET_STATE: (_state, action: PayloadAction<AppState>) => {
+    SET_STATE: (_state, action: PayloadAction<TournamentState>) => {
       return action.payload;
     },
-    // Client dispatches VOTE with entry (sent to server via socket middleware)
-    VOTE: (_state, _action: PayloadAction<{ entry: string }>) => {
-      // No local state change; server will send new state
-      return;
+    CREATE_TOURNAMENT: (
+      _state,
+      _action: PayloadAction<{ name: string; entries: string[]; timerSeconds?: number }>,
+    ) => {
+      return _state; // sent to server via socket middleware
     },
-    NEXT: () => {
-      // No local state change; server will send new state
-      return;
+    VOTE: (_state, _action: PayloadAction<{ entry: string }>) => {
+      return _state; // sent to server
+    },
+    NEXT: (state) => {
+      return state; // sent to server
     },
   },
 });
 
-export const { SET_STATE, VOTE, NEXT } = votingSlice.actions;
+export const { SET_STATE, CREATE_TOURNAMENT, VOTE, NEXT } =
+  votingSlice.actions;
 export default votingSlice.reducer;

@@ -2,45 +2,102 @@ import { createServer } from "http";
 import express from "express";
 import { Server } from "socket.io";
 import { configureStore } from "@reduxjs/toolkit";
-import { existsSync, readFileSync } from "fs";
+import { existsSync } from "fs";
 import { resolve, dirname, join } from "path";
 import { fileURLToPath } from "url";
-import reducer, { SET_ENTRIES, NEXT, VOTE } from "./reducer.js";
+import reducer, {
+  CREATE_TOURNAMENT,
+  RESTORE_STATE,
+  VOTE,
+  NEXT,
+  getWireState,
+} from "./reducer.js";
+import { saveTournament, loadTournament, archiveTournament, getHistory } from "./db.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Load movie entries
-const entriesData = readFileSync(resolve(__dirname, "entries.json"), "utf-8");
-const entries: string[] = JSON.parse(entriesData);
-
 // Set up Redux store
 const store = configureStore({ reducer });
-store.dispatch(SET_ENTRIES(entries));
-store.dispatch(NEXT()); // Start the first round
+
+// ── Persistent state: load saved tournament on startup ──
+const saved = loadTournament();
+if (saved) {
+  store.dispatch(RESTORE_STATE(saved));
+}
+
+// ── Auto-advance timer ──
+let advanceTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleAdvance(state: import("./core.js").TournamentState) {
+  // Clear existing timer
+  if (advanceTimer) {
+    clearTimeout(advanceTimer);
+    advanceTimer = null;
+  }
+
+  // Don't schedule if tournament is over or timer is disabled
+  if (state.winner || state.timerSeconds <= 0) return;
+
+  // Calculate time remaining
+  const elapsed = Date.now() - state.matchStartedAt;
+  const remaining = state.timerSeconds * 1000 - elapsed;
+
+  if (remaining <= 0) {
+    // Already expired — advance immediately
+    store.dispatch(NEXT());
+    return;
+  }
+
+  advanceTimer = setTimeout(() => {
+    store.dispatch(NEXT());
+  }, remaining);
+}
 
 // Set up Express + HTTP server
 const app = express();
+app.use(express.json());
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: "*" },
 });
 
-// Emit state changes to all clients
-store.subscribe(() => {
-  const state = store.getState();
-  io.emit("state", state);
+// ── REST API ──
+
+app.get("/api/history", (_req, res) => {
+  res.json(getHistory());
 });
 
-// Handle Socket.IO connections
+// ── Socket.IO ──
+
+// Track previous state to detect completion
+let prevWinner: string | undefined;
+
 io.on("connection", (socket) => {
   // Send current state to newly connected client
-  socket.emit("state", store.getState());
+  const state = store.getState();
+  if (state) {
+    socket.emit("state", getWireState(state));
+  }
 
   // Client sends actions, server applies them
-  socket.on("action", (action: { type: string; entry?: string }) => {
+  socket.on("action", (action: { type: string; [key: string]: unknown }) => {
     switch (action.type) {
+      case "CREATE_TOURNAMENT": {
+        const { name, entries, timerSeconds } = action as {
+          type: string;
+          name: string;
+          entries: string[];
+          timerSeconds?: number;
+        };
+        if (name && entries?.length >= 2) {
+          store.dispatch(CREATE_TOURNAMENT({ name, entries, timerSeconds }));
+        }
+        break;
+      }
       case "VOTE":
-        if (action.entry) store.dispatch(VOTE(action.entry));
+        if (typeof action.entry === "string") {
+          store.dispatch(VOTE(action.entry));
+        }
         break;
       case "NEXT":
         store.dispatch(NEXT());
@@ -49,7 +106,28 @@ io.on("connection", (socket) => {
   });
 });
 
-// Serve the Vite build when running from the Docker image.
+// Emit state changes to all clients + persist + timer
+store.subscribe(() => {
+  const state = store.getState();
+  if (!state) {
+    prevWinner = undefined;
+    return;
+  }
+
+  io.emit("state", getWireState(state));
+  scheduleAdvance(state);
+
+  // Detect tournament completion (winner just appeared)
+  if (state.winner && !prevWinner) {
+    archiveTournament(state);
+  } else if (!state.winner) {
+    saveTournament(state);
+  }
+  prevWinner = state.winner;
+});
+
+// ── Static file serving (production) ──
+
 const distPath = resolve(__dirname, "..", "..", "dist");
 if (existsSync(distPath)) {
   app.use(express.static(distPath));

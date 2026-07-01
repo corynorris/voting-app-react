@@ -1,24 +1,32 @@
 import { configureStore, type Middleware } from "@reduxjs/toolkit";
 import reducer, { SET_STATE } from "./reducer";
 import socket from "./socket";
-import type { AppState } from "./types";
+import type { TournamentState } from "./types";
 
-// Middleware: intercept remote actions and send them to server instead
+// Middleware: intercept actions and forward to server via socket
 const socketMiddleware: Middleware = () => (next) => (action) => {
-  const a = action as { type: string; payload?: { entry?: string } };
-  if (a.type === "voting/VOTE") {
-    socket.emit("action", {
-      type: "VOTE",
-      entry: a.payload?.entry,
-    });
-    return; // Don't apply locally — server will push new state
+  const a = action as { type: string; payload?: Record<string, unknown> };
+  switch (a.type) {
+    case "voting/CREATE_TOURNAMENT":
+      socket.emit("action", {
+        type: "CREATE_TOURNAMENT",
+        name: a.payload?.name,
+        entries: a.payload?.entries,
+        timerSeconds: a.payload?.timerSeconds,
+      });
+      return;
+    case "voting/VOTE":
+      socket.emit("action", {
+        type: "VOTE",
+        entry: a.payload?.entry,
+      });
+      return;
+    case "voting/NEXT":
+      socket.emit("action", { type: "NEXT" });
+      return;
+    default:
+      return next(action);
   }
-  if (a.type === "voting/NEXT") {
-    socket.emit("action", { type: "NEXT" });
-    return;
-  }
-
-  return next(action);
 };
 
 export const store = configureStore({
@@ -28,7 +36,7 @@ export const store = configureStore({
 });
 
 // Listen for state updates from server
-socket.on("state", (state: AppState) => {
+socket.on("state", (state: TournamentState) => {
   store.dispatch(SET_STATE(state));
 });
 
