@@ -1,34 +1,37 @@
-import Database from "better-sqlite3";
+import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-import type { TournamentState, Match } from "./core.js";
+import type { TournamentState } from "./core.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DB_PATH = resolve(__dirname, "..", "tournaments.db");
+const DB_PATH = resolve(__dirname, "..", "tournaments.json");
 
-let db: Database.Database;
-
-function getDb(): Database.Database {
-  if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma("journal_mode = WAL");
-    db.pragma("foreign_keys = ON");
-    initSchema();
-  }
-  return db;
+interface TournamentRow {
+  id: string;
+  name: string;
+  createdAt: string;
+  completedAt: string | null;
+  winner: string | null;
+  stateJson: string;
 }
 
-function initSchema() {
-  getDb().exec(`
-    CREATE TABLE IF NOT EXISTS tournaments (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      completed_at TEXT,
-      winner TEXT,
-      state_json TEXT NOT NULL
-    );
-  `);
+interface DbData {
+  tournaments: TournamentRow[];
+}
+
+function readDb(): DbData {
+  if (!existsSync(DB_PATH)) {
+    return { tournaments: [] };
+  }
+  try {
+    return JSON.parse(readFileSync(DB_PATH, "utf-8")) as DbData;
+  } catch {
+    return { tournaments: [] };
+  }
+}
+
+function writeDb(data: DbData): void {
+  writeFileSync(DB_PATH, JSON.stringify(data, null, 2), "utf-8");
 }
 
 // ── Save / Load ──
@@ -37,24 +40,31 @@ const CURRENT_ID = "current";
 
 /** Persist the tournament state. */
 export function saveTournament(state: TournamentState): void {
-  const db = getDb();
-  const json = JSON.stringify(state);
-  db.prepare(
-    `INSERT INTO tournaments (id, name, state_json) 
-     VALUES (?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET name = excluded.name, state_json = excluded.state_json, completed_at = NULL, winner = NULL`,
-  ).run(CURRENT_ID, state.name, json);
+  const data = readDb();
+  const idx = data.tournaments.findIndex((t) => t.id === CURRENT_ID);
+  const row: TournamentRow = {
+    id: CURRENT_ID,
+    name: state.name,
+    createdAt: new Date().toISOString(),
+    completedAt: null,
+    winner: null,
+    stateJson: JSON.stringify(state),
+  };
+  if (idx >= 0) {
+    data.tournaments[idx] = row;
+  } else {
+    data.tournaments.push(row);
+  }
+  writeDb(data);
 }
 
 /** Load the current tournament state, or null if none. */
 export function loadTournament(): TournamentState | null {
-  const db = getDb();
-  const row = db
-    .prepare("SELECT state_json FROM tournaments WHERE id = ?")
-    .get(CURRENT_ID) as { state_json: string } | undefined;
+  const data = readDb();
+  const row = data.tournaments.find((t) => t.id === CURRENT_ID);
   if (!row) return null;
   try {
-    return JSON.parse(row.state_json) as TournamentState;
+    return JSON.parse(row.stateJson) as TournamentState;
   } catch {
     return null;
   }
@@ -62,15 +72,19 @@ export function loadTournament(): TournamentState | null {
 
 /** Archive the completed tournament to history and clear current. */
 export function archiveTournament(state: TournamentState): void {
-  const db = getDb();
+  const data = readDb();
   const id = `${state.name}-${Date.now()}`;
-  const json = JSON.stringify(state);
-  db.prepare(
-    `INSERT INTO tournaments (id, name, created_at, completed_at, winner, state_json)
-     VALUES (?, ?, datetime('now'), datetime('now'), ?, ?)`,
-  ).run(id, state.name, state.winner ?? null, json);
+  data.tournaments.push({
+    id,
+    name: state.name,
+    createdAt: new Date().toISOString(),
+    completedAt: new Date().toISOString(),
+    winner: state.winner ?? null,
+    stateJson: JSON.stringify(state),
+  });
   // Clear current
-  db.prepare("DELETE FROM tournaments WHERE id = ?").run(CURRENT_ID);
+  data.tournaments = data.tournaments.filter((t) => t.id !== CURRENT_ID);
+  writeDb(data);
 }
 
 /** Get tournament history (completed tournaments). */
@@ -80,15 +94,15 @@ export function getHistory(): Array<{
   completedAt: string;
   winner: string;
 }> {
-  const db = getDb();
-  return db
-    .prepare(
-      "SELECT id, name, completed_at as completedAt, winner FROM tournaments WHERE id != ? AND completed_at IS NOT NULL ORDER BY completed_at DESC LIMIT 20",
-    )
-    .all(CURRENT_ID) as Array<{
-    id: string;
-    name: string;
-    completedAt: string;
-    winner: string;
-  }>;
+  const data = readDb();
+  return data.tournaments
+    .filter((t) => t.id !== CURRENT_ID && t.completedAt)
+    .sort((a, b) => b.completedAt!.localeCompare(a.completedAt!))
+    .slice(0, 20)
+    .map((t) => ({
+      id: t.id,
+      name: t.name,
+      completedAt: t.completedAt!,
+      winner: t.winner ?? "",
+    }));
 }
