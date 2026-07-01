@@ -21,13 +21,16 @@ export function Results() {
 
   return (
     <div className="results">
+      <h2>Current Standings</h2>
       <div className="tally">
-        {pair.map((entry) => (
-          <div key={entry} className="entry">
-            <h1>{entry}</h1>
-            <div className="voteCount">{tally[entry] ?? 0}</div>
-          </div>
-        ))}
+        <div className="entry pair-a">
+          <h1>{pair[0]}</h1>
+          <div className="voteCount">{tally[pair[0]] ?? 0}</div>
+        </div>
+        <div className="entry pair-b">
+          <h1>{pair[1]}</h1>
+          <div className="voteCount">{tally[pair[1]] ?? 0}</div>
+        </div>
       </div>
       <div className="management">
         <button className="next" onClick={() => dispatch(NEXT())}>

@@ -38,12 +38,13 @@ function VotePair({
   if (hasVotes) {
     return (
       <div className="results">
+        <h2>Current Standings</h2>
         <div className="tally">
-          <div className="entry">
+          <div className="entry pair-a">
             <h1>{pair[0]}</h1>
             <div className="voteCount">{tally[pair[0]] ?? 0}</div>
           </div>
-          <div className="entry">
+          <div className="entry pair-b">
             <h1>{pair[1]}</h1>
             <div className="voteCount">{tally[pair[1]] ?? 0}</div>
           </div>
@@ -60,21 +61,21 @@ function VotePair({
   // Vote buttons
   return (
     <div className="voting">
-      {pair.map((entry) => (
+      <h2>Choose your favorite</h2>
+      <div className="vote-pair">
         <button
-          key={entry}
-          onClick={() => dispatch(VOTE({ entry }))}
-          style={{
-            display: "block",
-            margin: "10px auto",
-            padding: "20px 40px",
-            fontSize: "1.2em",
-            cursor: "pointer",
-          }}
+          className="vote-btn pair-a"
+          onClick={() => dispatch(VOTE({ entry: pair[0] }))}
         >
-          <h1 style={{ margin: 0 }}>{entry}</h1>
+          <h1>{pair[0]}</h1>
         </button>
-      ))}
+        <button
+          className="vote-btn pair-b"
+          onClick={() => dispatch(VOTE({ entry: pair[1] }))}
+        >
+          <h1>{pair[1]}</h1>
+        </button>
+      </div>
     </div>
   );
 }

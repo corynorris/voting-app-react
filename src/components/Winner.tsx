@@ -5,14 +5,13 @@ interface WinnerProps {
 
 export function Winner({ winner, onRestart }: WinnerProps) {
   return (
-    <div className="winner" style={{ textAlign: "center", marginTop: "40px" }}>
-      <h1>🏆 Winner is {winner}! 🏆</h1>
-      <button
-        onClick={onRestart}
-        style={{ marginTop: "20px", padding: "10px 30px", fontSize: "1em" }}
-      >
-        Restart
-      </button>
+    <div className="winner">
+      <div className="winner-card">
+        <span className="winner-trophy">🏆</span>
+        <div className="winner-label">Winner</div>
+        <div className="winner-badge pulse">{winner}</div>
+        <button onClick={onRestart}>Start Over</button>
+      </div>
     </div>
   );
 }
