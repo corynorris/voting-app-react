@@ -10,7 +10,9 @@ export function Results() {
   const dispatch = useDispatch<AppDispatch>();
 
   if (winner) {
-    return <Winner winner={winner} onRestart={() => window.location.reload()} />;
+    return (
+      <Winner winner={winner} onRestart={() => window.location.reload()} />
+    );
   }
 
   if (!pair || !tally) {
