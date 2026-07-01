@@ -2,8 +2,8 @@ import { createServer } from "http";
 import express from "express";
 import { Server } from "socket.io";
 import { configureStore } from "@reduxjs/toolkit";
-import { readFileSync } from "fs";
-import { resolve, dirname } from "path";
+import { existsSync, readFileSync } from "fs";
+import { resolve, dirname, join } from "path";
 import { fileURLToPath } from "url";
 import reducer, { SET_ENTRIES, NEXT, VOTE } from "./reducer.js";
 
@@ -49,7 +49,15 @@ io.on("connection", (socket) => {
   });
 });
 
-// Serve static files in production
+// Serve the Vite build when running from the Docker image.
+const distPath = resolve(__dirname, "..", "..", "dist");
+if (existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.get("*", (_req, res) => {
+    res.sendFile(join(distPath, "index.html"));
+  });
+}
+
 const PORT = parseInt(process.env.PORT ?? "8090", 10);
 httpServer.listen(PORT, () => {
   console.log(`Voting server running on port ${PORT}`);
