@@ -4,10 +4,10 @@ import { Voting } from "./components/Voting";
 import { ThemeToggle } from "./components/ThemeToggle";
 
 export default function App() {
-  return (
-    <Provider store={store}>
-      <ThemeToggle />
-      <Voting />
-    </Provider>
-  );
+	return (
+		<Provider store={store}>
+			<ThemeToggle />
+			<Voting />
+		</Provider>
+	);
 }
