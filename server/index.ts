@@ -136,7 +136,9 @@ store.subscribe(() => {
 const distPath = resolve(__dirname, "..", "..", "dist");
 if (existsSync(distPath)) {
 	app.use(express.static(distPath));
-	app.get("*", (_req, res) => {
+	// Express 5 removed the "*" string path pattern; a pathless middleware is
+	// the supported SPA fallback.
+	app.use((_req, res) => {
 		res.sendFile(join(distPath, "index.html"));
 	});
 }
